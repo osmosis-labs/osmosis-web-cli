@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Osmosisd Web CLI </title>
+<link rel="stylesheet" href="style.css">
+<link rel="apple-touch-icon" href="/images/icon-192.png">
+<link rel="manifest" href="/manifest.json">
+
+
+</head>
+<body>
+ 
+<div id="terminal-window">
+    <div style="color: greenyellow;">Osmosisd Archive Node Web CLI</div>
+    
+    <div>
+          
+    <pre id="output" style="height: 50vh;">
+    
+    </pre>
+    <div class="shortcuts" style="float: right;">
+       Shortcuts: <button type="button" onclick="sendCommand('osmosisd status')">osmosisd status</button>
+    </div>
+    </div>
+
+    <form onsubmit="sendCommand(); return false;">
+        <div class="form-row">
+          <div class="form-group-command">
+            <label for="command">Command:</label>
+            <input type="text" id="command" name="command">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="node-input">Node:</label>
+            <input type="text" id="node-input" name="node" placeholder="https://rpc-osmosis-ia.cosmosia.notional.ventures:443">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <button type="submit">Execute</button>
+          </div>
+        </div>
+      </form>
+  
+
+  </div>
+        <h4>Command History</h4>
+        <div id="command-history"></div>
+    </div>
+      <script>
+const output = document.getElementById('output');
+const commandHistory = document.getElementById('command-history');
+let history = [];
+
+function loadHistory() {
+  const historyString = localStorage.getItem('history');
+  if (historyString) {
+    history = JSON.parse(historyString);
+  }
+}
+
+function saveHistory() {
+  localStorage.setItem('history', JSON.stringify(history));
+}
+
+function updateCommandHistory() {
+  const commandHistoryContainer = document.getElementById('command-history');
+  commandHistoryContainer.innerHTML = history.map((command, i) => {
+    const commandWithoutNode = command.replace(/ --node=.*$/, '');
+    return `
+      <div class="command-history-item">
+        <a href="#" onclick="sendCommand('${command}');return false;">${commandWithoutNode}</a>
+      </div>
+    `;
+  }).join('');
+}
+
+
+
+function sendCommand(command = null) {
+  const commandInput = document.getElementById('command');
+  const nodeInput = document.getElementById('node-input');
+  const defaultNodeUrl = 'https://rpc-osmosis-ia.cosmosia.notional.ventures:443';
+
+  if (command === 'clear') {
+    clearOutput();
+    return;
+  }
+
+  command = command || commandInput.value;
+  commandInput.value = command;
+
+  let commandWithNode = addNodeToCommand(command, nodeInput.value, defaultNodeUrl);
+  const commandWithoutNode = command.replace(/ --node=.*$/, '');
+
+   // Check if command includes 'start' or 'init', return error message
+   if (command.includes('start') || command.includes('init')) {
+    const errorMessage = '💩 Command not allowed. If you are looking to start an Osmosis node, <br> you should consider using the installer from https://get.osmosis.zone/ <br>';
+    displayError(errorMessage);
+    return;
+  }
+
+  history.push(commandWithoutNode);
+  displayCommand(commandWithNode);
+
+  executeCommand(commandWithNode)
+    .then(outputText => {
+      const decodedOutput = decodeBase64Strings(outputText);
+      displayOutput(decodedOutput);
+
+      updateCommandHistory();
+      updateURLParams(commandWithoutNode);
+      saveHistory(); // Save history to local storage
+    })
+    .catch(error => console.error(error));
+}
+
+function displayError(message) {
+  const output = document.getElementById('output');
+  const errorElement = document.createElement('div');
+  errorElement.classList.add('error');
+  errorElement.innerText = message;
+  output.appendChild(errorElement);
+}
+
+
+
+function clearOutput() {
+  output.innerHTML = '';
+}
+
+function addNodeToCommand(command, nodeUrl, defaultNodeUrl) {
+  if (!command.startsWith('osmosisd')) {
+    return command;
+  }
+  const url = nodeUrl || defaultNodeUrl;
+  return `${command} --node=${url}`;
+}
+
+function displayCommand(command) {
+  output.innerHTML += `➜  ~ ${command}\n`;
+}
+
+function executeCommand(command) {
+  return fetch('/execute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command }),
+  }).then(response => response.text());
+}
+
+function displayOutput(outputText) {
+  const decodedOutput = decodeBase64Strings(outputText);
+
+  let isJson = false;
+  let jsonOutput;
+  try {
+    jsonOutput = JSON.parse(decodedOutput);
+    isJson = true;
+  } catch (error) {
+    // The output is not JSON
+  }
+
+  if (isJson) {
+    const pre = document.createElement('pre');
+    pre.innerHTML = JSON.stringify(jsonOutput, null, 2);
+    output.appendChild(pre);
+  } else {
+    const pre = document.createElement('pre');
+    pre.innerHTML = decodedOutput;
+    output.appendChild(pre);
+  }
+
+  output.innerHTML += `
+    <button type="button" class="copy-output">Copy</button>
+  `;
+  output.scrollTop = output.scrollHeight;
+
+  // Add click event listener to new copy button
+  const copyButton = output.querySelector('.copy-output:last-child');
+  copyButton.addEventListener('click', () => {
+    const codeText = output.innerText;
+    navigator.clipboard.writeText(codeText);
+    copyButton.innerText = 'Copied!';
+    setTimeout(() => {
+      copyButton.innerText = 'Copy';
+    }, 2000);
+  });
+
+}
+
+
+function updateURLParams(command) {
+  const params = new URLSearchParams(window.location.search);
+  params.set('command', command.trim());
+  const newUrl = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
+  window.history.pushState({}, '', newUrl);
+}
+
+function copyOutput() {
+  const copyButtons = document.querySelectorAll('.copy-output');
+  copyButtons.forEach(copyButton => {
+    copyButton.addEventListener('click', () => {
+      const codeBlock = copyButton.parentNode.querySelector('pre');
+      const codeText = codeBlock.innerText;
+      navigator.clipboard.writeText(codeText);
+      copyButton.innerText = 'Copied!';
+      setTimeout(() => {
+        copyButton.innerText = 'Copy';
+      }, 2000);
+    });
+  });
+}
+
+
+function decodeBase64Strings(outputText) {
+  const lines = outputText.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.includes('key:') || line.includes('value:')) {
+      const decodedLine = decodeBase64StringInLine(line);
+      lines[i] = decodedLine;
+    }
+  }
+  return lines.join('\n');
+}
+
+function decodeBase64StringInLine(line) {
+  const substrings = ['key:', 'value:'];
+  let decodedLine = line;
+  for (const substring of substrings) {
+    const index = decodedLine.indexOf(substring);
+    if (index !== -1) {
+      const start = index + substring.length;
+      const end = decodedLine.indexOf(',', start);
+      const encodedString = decodedLine.substring(start, end !== -1 ? end : decodedLine.length).trim();
+      try {
+        const decodedString = atob(encodedString);
+        if (isPrintable(decodedString)) {
+          const highlightedString = `<span class="highlight" data-original="${encodedString}">${decodedString}</span>`;
+          decodedLine = decodedLine.replace(encodedString, highlightedString);
+        }
+      } catch (error) {
+        // Ignore errors for invalid base64 values
+      }
+    }
+  }
+  return decodedLine;
+}
+
+
+document.addEventListener('click', function(event) {
+const target = event.target;
+if (target.classList.contains('highlight')) {
+const originalString = target.dataset.original;
+const currentString = target.textContent;
+target.textContent = originalString;
+target.dataset.original = currentString;
+}
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+const commandInput = document.getElementById('command');
+const urlSearchParams = new URLSearchParams(window.location.search);
+if (urlSearchParams.has('command')) {
+const command = urlSearchParams.get('command');
+commandInput.value = command;
+sendCommand(command);
+} else {
+updateCommandHistory();
+}
+loadHistory(); // Load history from local storage
+updateCommandHistory(); // Update command history after loading from local storage
+});
+
+function isPrintable(decodedString) {
+const printableChars = /[ -~\t\n\r]/;
+for (let i = 0; i < decodedString.length; i++) {
+if (!printableChars.test(decodedString.charAt(i))) {
+return false;
+}
+}
+return true;
+}
+
+// PWA
+if (typeof navigator.serviceWorker !== 'undefined') {
+    navigator.serviceWorker.register('sw.js')
+  }
+
+    </script>
+  </body>
+  </html>

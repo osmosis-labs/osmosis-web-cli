@@ -1,0 +1,31 @@
+{
+    "name": "Osmosisd Web CLI",
+    "short_name": "Osmosis Web CLI",
+    "icons": [
+      {
+        "src": "/ios/192.png",
+        "sizes": "192x192",
+        "type": "image/png"
+      },
+      {
+        "src": "/ios/512.png",
+        "sizes": "512x512",
+        "type": "image/png"
+      },
+      {
+        "src": "/ios/192.png",
+        "sizes": "192x192",
+        "type": "image/png",
+        "purpose": "any"
+      }
+    ],
+    "start_url": "/?source=pwa",
+    "background_color": "#131313",
+    "theme_color": "#000",
+    "display": "standalone",
+    "scope": "/",
+    "description": "Your Osmosisd Web CLI app is a web-based command-line interface (CLI) that allows users to interact with the Osmosis network. Osmosis is a decentralized exchange (DEX) built on the Cosmos SDK, and your app allows users to execute Osmosis CLI commands from their web browser, without having to install any software or connect to a node.",
+    "categories": [
+      "utilities"
+    ]
+  }
